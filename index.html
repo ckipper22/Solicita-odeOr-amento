@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitação de Orçamento - Multi-Itens</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        /* Estilos Base - Fundo Claro (Não-Dark Mode) */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4; /* Fundo claro */
+            color: #333; /* Texto escuro */
+            margin: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1e88e5;
+            text-align: center;
+            border-bottom: 3px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        /* Estilo para cada item do orçamento */
+        .item-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            background-color: #f9f9f9;
+            position: relative;
+            display: flex; /* Flexbox para alinhar conteúdo */
+            gap: 15px; /* Espaçamento entre a imagem e os campos */
+        }
+        
+        /* Estilos da coluna de Imagem */
+        .item-image-col {
+            flex-shrink: 0; /* Não diminui */
+            width: 150px;
+            text-align: center;
+        }
+        .item-image-preview {
+            max-width: 100%;
+            max-height: 100px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            padding: 3px;
+            object-fit: contain;
+            display: none;
+            border-radius: 4px;
+        }
+        
+        /* Estilos da coluna de Campos */
+        .item-fields-col {
+            flex-grow: 1; /* Ocupa o espaço restante */
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 3px;
+            font-size: 0.9em;
+        }
+        input[type="text"],
+        input[type="url"],
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 0.9em;
+        }
+        input[type="number"] {
+            width: 100px;
+            text-align: right;
+            font-weight: bold;
+        }
+
+        /* Botão Remover */
+        .btn-remove {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: background-color 0.3s;
+        }
+        .btn-remove:hover {
+            background-color: #c0392b;
+        }
+
+        /* Botões de Ação */
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+        }
+        .btn-action {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        #btnAddItem {
+            background-color: #28a745;
+            color: white;
+        }
+        #btnAddItem:hover {
+            background-color: #218838;
+        }
+        #btnGerarPDF {
+            background-color: #1e88e5;
+            color: white;
+        }
+        #btnGerarPDF:hover {
+            background-color: #1565c0;
+        }
+        
+        /* ** CORREÇÃO PDF **: Oculta o conteúdo movendo-o para fora da tela */
+        #pdfContent {
+            display: none;
+        }
+        
+        /* Estilos de impressão (Para PDF) */
+        @media print {
+            /* ** REFORÇANDO A PREFERÊNCIA: Fundo branco e texto preto para economizar tinta ** */
+            body { 
+                background: #fff !important; 
+                margin: 0; 
+                padding: 0; 
+                color: #000 !important; 
+            }
+            .container { 
+                box-shadow: none; 
+                border: none; 
+                padding: 0; 
+                max-width: 100%; 
+            }
+            /* Oculta os botões e os inputs de arquivo/links no PDF */
+            .button-group, .file-input, .input-url, .btn-remove { 
+                display: none !important; 
+            } 
+
+            /* Ajusta o layout dos itens para o PDF */
+            .item-card {
+                border: 1px solid #000 !important;
+                padding: 10px;
+                background-color: #fff !important;
+                page-break-inside: avoid; /* Evita quebra de página dentro de um item */
+            }
+            .item-image-col { width: 100px; }
+            .item-image-preview { max-height: 80px; }
+
+            /* Torna os dados do item visíveis no PDF */
+            .item-field-pdf {
+                font-size: 0.9em;
+                margin-bottom: 5px;
+            }
+            .item-field-pdf strong {
+                font-weight: bold;
+                color: #333;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="conteudoParaPDF">
+        <h1>Solicitação de Orçamento - Multi-Itens</h1>
+        <p style="text-align: center; font-size: 0.9em; color: #555;">Preencha os dados de cada produto desejado e clique em "Gerar Orçamento em PDF".</p>
+
+        <div class="form-group" style="margin-top: 25px; padding: 10px; border: 1px dashed #ccc; border-radius: 4px;">
+            <label for="orcamentoTitulo">Título da Proposta/Orçamento:</label>
+            <input type="text" id="orcamentoTitulo" value="Orçamento de Produtos para Fornecedor" style="font-weight: bold; font-size: 1.1em;">
+        </div>
+
+        <div id="itemsContainer" style="margin-top: 20px;">
+            </div>
+
+        <div class="button-group">
+            <button type="button" id="btnAddItem" class="btn-action">+ Adicionar Item</button>
+            <button type="button" id="btnGerarPDF" class="btn-action">Gerar Orçamento em PDF</button>
+        </div>
+        
+        <div id="pdfContent" style="display: none;"></div>
+
+    </div>
+
+    <script>
+        let itemCounter = 0;
+        const itemsContainer = document.getElementById('itemsContainer');
+        const pdfContent = document.getElementById('pdfContent');
+        const btnAddItem = document.getElementById('btnAddItem');
+        const btnGerarPDF = document.getElementById('btnGerarPDF');
+
+        // --------------------------------------------------------------------------------
+        // 1. FUNÇÃO DE GERAÇÃO DE HTML PARA ITEM
+        // --------------------------------------------------------------------------------
+        
+        /**
+         * Adiciona um novo bloco de item ao formulário.
+         */
+        function addItem() {
+            itemCounter++;
+            const itemId = `item-${itemCounter}`;
+            
+            const itemHTML = `
+                <div class="item-card" id="${itemId}">
+                    <button type="button" class="btn-remove" onclick="removeItem('${itemId}')">Remover</button>
+
+                    <div class="item-image-col">
+                        <label>Imagem (Ref.):</label>
+                        <input type="file" accept="image/*" class="file-input local-file-input" 
+                               onchange="updateImagePreview(this, 'preview-url-${itemId}')">
+                        
+                        <img id="preview-url-${itemId}" src="" alt="Pré-visualização" class="item-image-preview">
+                        <p style="font-size: 0.7em; margin-top: 5px;">Anexe ou use link (abaixo).</p>
+                    </div>
+
+                    <div class="item-fields-col">
+                        <div class="form-group">
+                            <label for="nome-produto-${itemId}">Nome/Descrição (para o PDF):</label>
+                            <input type="text" id="nome-produto-${itemId}" placeholder="Nome do Produto/Serviço">
+                        </div>
+                        
+                        <div style="display: flex; gap: 15px;">
+                            <div class="form-group" style="flex-grow: 1;">
+                                <label for="link-img-${itemId}">Link da Imagem (URL Referência):</label>
+                                <input type="url" id="link-img-${itemId}" class="input-url image-url-input" 
+                                       placeholder="Ex: https://dominio.com/img.jpg"
+                                       oninput="updateImagePreview(this, 'preview-url-${itemId}')">
+                                <small style="font-size: 0.75em; color: #a0522d; display: block; margin-top: 3px;">
+                                    *Dica: Clique com o botão direito sobre a imagem do produto que deseja cotar( em qualquer site) e selecione **"Copiar endereço da imagem"**.
+                                </small>
+                            </div>
+                            <div class="form-group" style="width: 150px;">
+                                <label for="quantidade-${itemId}">Quantidade:</label>
+                                <input type="number" id="quantidade-${itemId}" value="1" min="1">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="link-venda-${itemId}">Link de Venda (URL Referência):</label>
+                            <input type="url" id="link-venda-${itemId}" class="input-url link-venda-input" 
+                                   placeholder="Ex: https://ecommerce.com/produto/id123">
+                        </div>
+                    </div>
+                </div>
+            `;
+            itemsContainer.insertAdjacentHTML('beforeend', itemHTML);
+        }
+
+        /**
+         * Remove um bloco de item do formulário.
+         */
+        function removeItem(itemId) {
+            document.getElementById(itemId).remove();
+        }
+
+        /**
+         * Atualiza a pré-visualização da imagem no formulário, priorizando o arquivo local.
+         * @param {HTMLInputElement} input - O input que disparou o evento (URL ou File).
+         * @param {string} previewId - ID do elemento <img> de pré-visualização.
+         */
+        function updateImagePreview(input, previewId) {
+            const previewImage = document.getElementById(previewId);
+            const itemCard = input.closest('.item-card');
+            const fileInput = itemCard.querySelector('.local-file-input');
+            const urlInput = itemCard.querySelector('.image-url-input');
+
+            previewImage.style.display = 'none';
+
+            // Prioridade 1: Arquivo Local (Base64)
+            if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result; // Base64 (necessário para incorporar no PDF)
+                    previewImage.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            } 
+            // Prioridade 2: URL da Imagem
+            else if (urlInput && urlInput.value.trim() !== '') {
+                previewImage.src = urlInput.value.trim();
+                previewImage.style.display = 'block';
+            } else {
+                previewImage.src = '';
+            }
+        }
+
+        // --------------------------------------------------------------------------------
+        // 2. FUNÇÃO DE GERAÇÃO DE PDF
+        // --------------------------------------------------------------------------------
+
+        /**
+         * Coleta os dados e gera o HTML limpo para o PDF.
+         */
+        function generatePDFHTML() {
+            const itemCards = itemsContainer.querySelectorAll('.item-card');
+            if (itemCards.length === 0) {
+                alert('Por favor, adicione pelo menos um item ao orçamento antes de gerar o PDF.');
+                return null;
+            }
+
+            const orcamentoTitulo = document.getElementById('orcamentoTitulo').value;
+            let itemsHtml = '';
+            
+            itemCards.forEach((card, index) => {
+                const itemId = card.id;
+                
+                // Coleta de dados
+                const nomeProduto = document.getElementById(`nome-produto-${itemId}`).value || `Item ${index + 1} (Sem Nome)`;
+                const quantidade = document.getElementById(`quantidade-${itemId}`).value || '1';
+                const linkImgRef = document.getElementById(`link-img-${itemId}`).value || 'N/A';
+                const linkVendaRef = document.getElementById(`link-venda-${itemId}`).value || 'N/A';
+                const previewImageElement = document.getElementById(`preview-url-${itemId}`);
+                const imageUrl = previewImageElement.src || '';
+                
+                // Criação do HTML de cada item para o PDF
+                itemsHtml += `
+                    <div style="border: 1px solid #000; padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; gap: 10px; page-break-inside: avoid;">
+                        
+                        <div style="width: 80px; flex-shrink: 0; text-align: center;">
+                            ${imageUrl ? 
+                                `<img src="${imageUrl}" alt="Produto" style="max-width: 100%; max-height: 80px; object-fit: contain; display: block; margin: 0 auto; border: 1px solid #ddd;">` : 
+                                `<span style="font-size: 0.7em; color: #777;">Sem Imagem</span>`}
+                        </div>
+
+                        <div style="flex-grow: 1;">
+                            <h3 style="margin: 0 0 5px 0; color: #1e88e5; font-size: 1.1em;">${nomeProduto}</h3>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px;">
+                                <span><strong>Qtd. Desejada:</strong> <span style="font-weight: bold;">${quantidade}</span></span>
+                                <span style="font-weight: bold; color: #28a745;">Item ${index + 1}</span>
+                            </div>
+                            <p style="margin: 0; font-size: 0.8em; color: #555;">
+                                <strong>Link da Imagem (Ref.):</strong> <a href="${linkImgRef}" target="_blank" style="color: #333;">${linkImgRef.substring(0, 50)}...</a><br>
+                                <strong>Link de Venda (Ref.):</strong> <a href="${linkVendaRef}" target="_blank" style="color: #333;">${linkVendaRef.substring(0, 50)}...</a>
+                            </p>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // Monta o HTML final que será convertido em PDF
+            const fullHtml = `
+                <div style="padding: 20px; color: #000;">
+                    <h1 style="color: #1e88e5; border-bottom: 2px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; text-align: center;">${orcamentoTitulo}</h1>
+                    <p style="font-size: 0.9em; margin-bottom: 20px;">**Emissão:** ${new Date().toLocaleDateString('pt-BR')}</p>
+                    <h2 style="font-size: 1.2em; color: #333; margin-bottom: 15px; border-left: 4px solid #1e88e5; padding-left: 10px;">Itens para Orçamento</h2>
+                    ${itemsHtml}
+                    <p style="margin-top: 30px; text-align: center; font-size: 0.8em; color: #777;">
+                        Documento gerado para fins de solicitação de orçamento. Não é um pedido de compra finalizado.
+                    </p>
+                </div>
+            `;
+
+            pdfContent.innerHTML = fullHtml;
+            return fullHtml;
+        }
+
+        /**
+         * Dispara a conversão e o download do PDF.
+         */
+        function saveAsPDF() {
+            // 1. Gera o HTML de preview no elemento #pdfContent
+            const proposalHtml = generatePDFHTML();
+            if (!proposalHtml) return;
+
+            const { jsPDF } = window.jspdf;
+            const element = document.getElementById('pdfContent');
+            
+            // 2. Prepara o ambiente para a captura: move o elemento para fora da tela
+            element.style.position = 'absolute';
+            element.style.left = '-9999px';
+            element.style.display = 'block'; 
+
+            // 3. Executa a conversão
+            html2canvas(element, { 
+                scale: 2, // Maior escala para melhor qualidade no PDF
+                useCORS: true,
+                logging: false, 
+                windowWidth: 900 
+            }).then((canvas) => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4'); 
+
+                const imgWidth = 210; 
+                const pageHeight = 295; 
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                pdf.save('Orcamento_MultiItens.pdf');
+                
+                // 4. Restaura o estado original
+                element.style.position = 'initial'; 
+                element.style.left = 'initial';
+                element.style.display = 'none'; 
+            });
+        }
+
+
+        // --------------------------------------------------------------------------------
+        // 3. EVENTOS E INICIALIZAÇÃO
+        // --------------------------------------------------------------------------------
+
+        btnAddItem.addEventListener('click', addItem);
+        btnGerarPDF.addEventListener('click', saveAsPDF);
+
+        // Adiciona o primeiro item ao carregar a página
+        document.addEventListener('DOMContentLoaded', addItem);
+    </script>
+
+</body>
+</html>
